@@ -44,3 +44,5 @@ openmtp-gh-issues
 idea
 .idea
 .mastra
+.claude
+.idea/*/**
