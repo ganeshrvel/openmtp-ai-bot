@@ -138,56 +138,56 @@ const retrieveContextTool = createTool({
 //   },
 // });
 
-const debugTool = createTool({
-  id: 'debug_tool',
-  description: 'Debug tool to test tool execution',
-  inputSchema: z.object({
-    message: z.string().describe('Debug message to log'),
-  }),
-  execute: async ({ context: { message } }) => {
-    // console.log(`🔧 [DEBUG TOOL] ${message}`);
-    return { success: true, message: `Debug executed: ${message}` };
-  },
-});
-
-// Initialize memory with PostgreSQL storage
-const memory = new Memory({
-  storage: new PostgresStore({
-    connectionString: process.env.POSTGRES_CONNECTION_STRING!,
-  }),
-  embedder: openai.embedding('text-embedding-3-small'),
-  vector: pgVector,
-  options: {
-    lastMessages: 10,              // Keep last 10 messages in context
-    semanticRecall: {              // Vector-based semantic search
-      topK: 4,                     // Top 4 similar memories
-      messageRange: 3,             // Include 3 messages before/after each match
-    scope: 'thread',             // Search within current thread
-  },
-  workingMemory: {               // Persistent working memory
-    enabled: true,
-    template: `# OpenMTP Support Session
-
-  ## User Problem Context
-  - Current Issue:
-  - Device Info:
-  - OS Version:
-  - Transfer Type:
-
-  ## Solutions Attempted
-  - None yet
-
-  ## Knowledge Base References
-  - Relevant Issues:
-  - Documentation Links:
-
-  ## Session Status
-  - Started: ${new Date().toISOString()}
-  - Resolution Status: In Progress
-  `
-  }
-}
-});
+// const debugTool = createTool({
+//   id: 'debug_tool',
+//   description: 'Debug tool to test tool execution',
+//   inputSchema: z.object({
+//     message: z.string().describe('Debug message to log'),
+//   }),
+//   execute: async ({ context: { message } }) => {
+//     // console.log(`🔧 [DEBUG TOOL] ${message}`);
+//     return { success: true, message: `Debug executed: ${message}` };
+//   },
+// });
+//
+// // Initialize memory with PostgreSQL storage
+// const memory = new Memory({
+//   storage: new PostgresStore({
+//     connectionString: process.env.POSTGRES_CONNECTION_STRING!,
+//   }),
+//   embedder: openai.embedding('text-embedding-3-small'),
+//   vector: pgVector,
+//   options: {
+//     lastMessages: 10,              // Keep last 10 messages in context
+//     semanticRecall: {              // Vector-based semantic search
+//       topK: 4,                     // Top 4 similar memories
+//       messageRange: 3,             // Include 3 messages before/after each match
+//     scope: 'thread',             // Search within current thread
+//   },
+//   workingMemory: {               // Persistent working memory
+//     enabled: true,
+//     template: `# OpenMTP Support Session
+//
+//   ## User Problem Context
+//   - Current Issue:
+//   - Device Info:
+//   - OS Version:
+//   - Transfer Type:
+//
+//   ## Solutions Attempted
+//   - None yet
+//
+//   ## Knowledge Base References
+//   - Relevant Issues:
+//   - Documentation Links:
+//
+//   ## Session Status
+//   - Started: ${new Date().toISOString()}
+//   - Resolution Status: In Progress
+//   `
+//   }
+// }
+// });
 
 export const openmtpAgent = new Agent({
   name: 'OpenMTP Agent',

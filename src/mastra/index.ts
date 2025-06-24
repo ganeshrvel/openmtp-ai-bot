@@ -5,10 +5,6 @@ import { PinoLogger } from "@mastra/loggers";
 import {openmtpAgent, pgVector} from "@/mastra/agents/openmtp-agent";
 import { LangfuseExporter } from "langfuse-vercel";
 
-import {
-  OpenInferenceOTLPTraceExporter,
-  isOpenInferenceSpan,
-} from "@arizeai/openinference-mastra";
 
 // Check if we should run indexing mode
 if (process.env.INDEX_MODE === 'true') {
