@@ -5,6 +5,11 @@ import { PinoLogger } from "@mastra/loggers";
 import {openmtpAgent, pgVector} from "@/mastra/agents/openmtp-agent";
 import { LangfuseExporter } from "langfuse-vercel";
 
+import {
+  OpenInferenceOTLPTraceExporter,
+  isOpenInferenceSpan,
+} from "@arizeai/openinference-mastra";
+
 // Check if we should run indexing mode
 if (process.env.INDEX_MODE === 'true') {
   console.log("🔧 Running in INDEX_MODE...");
@@ -62,6 +67,29 @@ export const mastra = new Mastra({
     },
   },
 });
+
+// export const mastra = new Mastra({
+//   agents: {openmtpAgent},
+//   vectors: { pgVector },
+//   logger: new PinoLogger({
+//     name: "OpenMTP-AI",
+//     level: "debug",
+//   }),
+//   telemetry: {
+//     serviceName: "openmtp-ai-bot",
+//     enabled: true,
+//     // export: {
+//     //   type: "custom",
+//     //   exporter: new OpenInferenceOTLPTraceExporter({
+//     //   url: process.env.PHOENIX_COLLECTOR_ENDPOINT!,
+//     //     headers: {
+//     //       Authorization: `Bearer ${process.env.PHOENIX_API_KEY}`,
+//     //     },
+//     //     spanFilter: isOpenInferenceSpan,
+//     //   }),
+//     // },
+//   },
+// });
 
 console.log("💬 Starting OpenMTP conversation interface...");
 
