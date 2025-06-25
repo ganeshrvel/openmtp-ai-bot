@@ -34,24 +34,59 @@ const retrieveContextTool = createTool({
     })),
   }),
   execute: async ({ context: { relevantContext, sources } }) => {
-  //   console.log(`📋 [RETRIEVED DOCUMENTS] Found ${sources.length} documents:`);
-  //   sources.forEach((doc, index) => {
-  //     console.log(`   ${index + 1}. ${doc.metadata?.issue_ref} (Score:
-  // ${doc.score.toFixed(4)})`);
-  //     console.log(`      Title: ${doc.metadata?.title}`);
-  //     console.log(`      Preview: ${doc.document?.substring(0, 100) ||
-  //     doc.metadata?.text?.substring(0, 100)}...`);
-  //     console.log('---');
-  //   });
+    console.log(`🔍 [MASTRA RETRIEVAL] Found ${sources.length} documents:`);
+    sources.forEach((doc, index) => {
+      console.log(`   ${index + 1}. ${doc.metadata?.issue_ref} (Score: ${doc.score.toFixed(4)})`);
+      console.log(`      Title: ${doc.metadata?.title}`);
+      console.log(`      URL: ${doc.metadata?.url}`);
+      console.log(`      Status: ${doc.metadata?.status}`);
+      console.log(`      Has Answers: ${doc.metadata?.has_answers}`);
+      console.log(`      Answer Count: ${doc.metadata?.answer_count}`);
+      console.log(`      Text: ${doc.metadata?.text}...`);
+      console.log('─'.repeat(100));
+    });
     
     return {
       success: true,
       logged_count: sources.length,
+      retrieved_documents: sources.map(doc => ({
+        issue_ref: doc.metadata?.issue_ref,
+        title: doc.metadata?.title,
+        url: doc.metadata?.url,
+        score: doc.score,
+        has_answers: doc.metadata?.has_answers,
+        answer_count: doc.metadata?.answer_count,
+        text: doc.metadata?.text,
+      }))
     };
   },
 });
 
 
+export const openmtpAgent = new Agent({
+  name: 'OpenMTP Agent',
+  instructions: `You are an OpenMTP specialist assistant with enhanced context tracing.
+      
+      IMPORTANT CONTEXT UNDERSTANDING:
+      - Issues contain questions (from users) and answers[] (from app owner/developers)
+      - Prioritize answers[] from the app owner as authoritative solutions
+      - Some replies may also contain valuable answers
+      - Questions are usually in the title, sometimes with additional body text
+      - Always distinguish between user questions vs official developer answers
+      
+      RESPONSE GUIDELINES:
+      - Prioritize official answers from the app owner in your responses
+      - Reference specific GitHub issue numbers and URLs when available
+      - Distinguish between official solutions vs user discussions
+      - If official answers exist, present them as the primary solution
+      - If no official answers exist, provide helpful suggestions based on similar issues and common troubleshooting steps
+      - Include user questions for context but emphasize practical solutions
+      - Never state "no official responses" - instead offer actionable recommendations.
+      
+      Provide a helpful response based on the context above. If you reference any issues, include their numbers and URLs.`,
+  model: openai('gpt-4o-mini'),
+  tools: { vectorQueryTool, retrieveContextTool },
+});
 
 
 // const retrieveContextTool = createTool({
@@ -189,48 +224,7 @@ const retrieveContextTool = createTool({
 // }
 // });
 
-export const openmtpAgent = new Agent({
-  name: 'OpenMTP Agent',
-  instructions: `You are an OpenMTP specialist assistant with enhanced context
-  tracing.
 
-    WORKFLOW:
-    1. FIRST use the vectorQueryTool to search the knowledge base with queryText
-  and topK
-    2. THEN use the retrieveContextTool to log the results from vectorQueryTool
-    3. Base your responses on the retrieved and marked GitHub issues
-
-    IMPORTANT CONTEXT UNDERSTANDING:
-    - Issues contain questions (from users) and answers[] (from app
-  owner/developers)
-    - Prioritize answers[] from the app owner as authoritative solutions
-    - Some replies may also contain valuable answers
-    - Questions are usually in the title, sometimes with additional body text
-    - Always distinguish between user questions vs official developer answers
-
-    The retrieveContextTool will:
-    - Log detailed information about each retrieved document
-    - Provide observability into what context is being used
-    - Return marked context with scores and metadata
-
-    RESPONSE GUIDELINES:
-  - Prioritize official answers from the app owner in your responses
-  - Reference specific GitHub issue numbers and URLs
-  - Distinguish between official solutions vs user discussions
-  - If official answers exist, present them as the primary solution
-  - If no official answers exist, provide helpful suggestions based on similar
-  issues and common troubleshooting steps
-  - Include user questions for context but emphasize practical solutions
-  - Never state "no official responses" - instead offer actionable
-  recommendations
-
-  Always search the knowledge base before answering questions about OpenMTP.\`,
-
-  The agent should suggest solutions like:
-  - Based on similar device detection issues from other GitHub issues`,
-  model: openai('gpt-4o-mini'),
-  tools: { vectorQueryTool, retrieveContextTool },
-});
 
 
 

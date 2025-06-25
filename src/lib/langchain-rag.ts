@@ -163,7 +163,7 @@ export class OpenMTPLangChainRAG {
           documents: similarDocs.map(doc => ({
             issue_ref: doc.metadata?.issue_ref,
             score: doc.score,
-            preview: doc.document?.substring(0, 100),
+            document: doc.document,
           })),
         },
       });
@@ -191,6 +191,11 @@ export class OpenMTPLangChainRAG {
           sources: similarDocs.map(doc => ({
             issue_ref: doc.metadata?.issue_ref,
             url: doc.metadata?.url,
+            score: doc.score,
+          })),
+          retrieved_chunks: similarDocs.map(doc => ({
+            content: doc.document,
+            metadata: doc.metadata,
             score: doc.score,
           })),
         },
