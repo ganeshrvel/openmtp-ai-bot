@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { BasicViewer } from '@/components/BasicViewer';
+import { ImageViewer } from '@/components/ImageViewer';
 
 interface Dataset {
   id: string;
@@ -41,7 +42,7 @@ export default function DatasetPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const datasetId = params.id as string;
-  const viewerParam = searchParams.get('viewer') as 'tabular' | 'basic' | null;
+  const viewerParam = searchParams.get('viewer') as 'tabular' | 'basic' | 'image' | null;
   
   const [datasets, setDatasets] = useLocalStorageState<Dataset[]>('csv-datasets', {
     defaultValue: []
@@ -107,20 +108,20 @@ export default function DatasetPage() {
   const [customFieldValues, setCustomFieldValues] = useState<{ [fieldName: string]: string }>({});
   const [newFieldName, setNewFieldName] = useState('');
   const [showAddField, setShowAddField] = useState(false);
-  const [viewerMode, setViewerMode] = useState<'tabular' | 'basic'>(viewerParam || 'tabular');
+  const [viewerMode, setViewerMode] = useState<'tabular' | 'basic' | 'image'>(viewerParam || 'tabular');
 
   const currentDataset = datasets.find(d => d.id === datasetId);
   const csvData = currentDataset?.rows || [];
   const headers = currentDataset?.headers || [];
 
-  const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic') => {
+  const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic' | 'image') => {
     setViewerMode(newViewerMode);
     router.push(`/dataset/${datasetId}/${newViewerMode}`);
   }, [datasetId, router]);
 
   // Sync viewer mode with URL parameter
   useEffect(() => {
-    if (viewerParam && (viewerParam === 'tabular' || viewerParam === 'basic')) {
+    if (viewerParam && (viewerParam === 'tabular' || viewerParam === 'basic' || viewerParam === 'image')) {
       setViewerMode(viewerParam);
     }
   }, [viewerParam]);
@@ -405,6 +406,13 @@ export default function DatasetPage() {
                   <Eye className="h-4 w-4 mr-2" />
                   Basic
                 </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleViewerChange('image')}
+                  className={viewerMode === 'image' ? 'bg-purple-900/20' : ''}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Image
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -452,8 +460,18 @@ export default function DatasetPage() {
                   </table>
                 </div>
               </div>
-            ) : (
+            ) : viewerMode === 'basic' ? (
               <BasicViewer
+                currentRowData={csvData[currentRowIndex] || []}
+                headers={headers}
+                currentRowIndex={currentRowIndex}
+                totalRows={csvData.length}
+                datasetName={currentDataset.name}
+                onFieldChange={handleFieldChange}
+                onNavigate={handleNavigate}
+              />
+            ) : (
+              <ImageViewer
                 currentRowData={csvData[currentRowIndex] || []}
                 headers={headers}
                 currentRowIndex={currentRowIndex}
