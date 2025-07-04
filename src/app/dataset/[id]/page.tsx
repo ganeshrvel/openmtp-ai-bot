@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, PencilIcon, ArrowLeft, Database, Plus, X } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { ChevronLeft, ChevronRight, PencilIcon, ArrowLeft, Database, Plus, X, ChevronDown, Eye } from 'lucide-react';
 import Papa from 'papaparse';
 import useLocalStorageState from 'use-local-storage-state';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,13 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { BasicViewer } from '@/components/BasicViewer';
 
 interface Dataset {
   id: string;
@@ -32,7 +39,9 @@ interface Dataset {
 export default function DatasetPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const datasetId = params.id as string;
+  const viewerParam = searchParams.get('viewer') as 'tabular' | 'basic' | null;
   
   const [datasets, setDatasets] = useLocalStorageState<Dataset[]>('csv-datasets', {
     defaultValue: []
@@ -98,10 +107,23 @@ export default function DatasetPage() {
   const [customFieldValues, setCustomFieldValues] = useState<{ [fieldName: string]: string }>({});
   const [newFieldName, setNewFieldName] = useState('');
   const [showAddField, setShowAddField] = useState(false);
+  const [viewerMode, setViewerMode] = useState<'tabular' | 'basic'>(viewerParam || 'tabular');
 
   const currentDataset = datasets.find(d => d.id === datasetId);
   const csvData = currentDataset?.rows || [];
   const headers = currentDataset?.headers || [];
+
+  const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic') => {
+    setViewerMode(newViewerMode);
+    router.push(`/dataset/${datasetId}/${newViewerMode}`);
+  }, [datasetId, router]);
+
+  // Sync viewer mode with URL parameter
+  useEffect(() => {
+    if (viewerParam && (viewerParam === 'tabular' || viewerParam === 'basic')) {
+      setViewerMode(viewerParam);
+    }
+  }, [viewerParam]);
 
   const updateDatasetAnnotations = useCallback((datasetId: string, newAnnotations: { [rowIndex: number]: string }) => {
     setDatasets(prev => prev.map(dataset => {
@@ -286,6 +308,36 @@ export default function DatasetPage() {
     setCustomFieldValues({});
   }, []);
 
+  // Basic Viewer state
+  const [currentRowIndex, setCurrentRowIndex] = useState(0);
+
+  // Stable event handlers for BasicViewer
+  const handleFieldChange = useCallback((headerIndex: number, newValue: string) => {
+    if (currentDataset) {
+      const newRows = [...currentDataset.rows];
+      newRows[currentRowIndex][headerIndex] = newValue;
+      
+      setDatasets(prev => prev.map(dataset => {
+        if (dataset.id === datasetId) {
+          return {
+            ...dataset,
+            rows: newRows,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return dataset;
+      }));
+    }
+  }, [currentDataset, currentRowIndex, datasetId, setDatasets]);
+
+  const handleNavigate = useCallback((direction: 'prev' | 'next') => {
+    if (direction === 'prev' && currentRowIndex > 0) {
+      setCurrentRowIndex(currentRowIndex - 1);
+    } else if (direction === 'next' && currentRowIndex < csvData.length - 1) {
+      setCurrentRowIndex(currentRowIndex + 1);
+    }
+  }, [currentRowIndex, csvData.length]);
+
   if (!currentDataset) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 flex items-center justify-center">
@@ -329,49 +381,89 @@ export default function DatasetPage() {
               <Plus className="h-4 w-4" />
               Add Field
             </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Eye className="h-4 w-4" />
+                  Viewer: {viewerMode.charAt(0).toUpperCase() + viewerMode.slice(1)}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem 
+                  onClick={() => handleViewerChange('tabular')}
+                  className={viewerMode === 'tabular' ? 'bg-purple-900/20' : ''}
+                >
+                  <Database className="h-4 w-4 mr-2" />
+                  Tabular
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleViewerChange('basic')}
+                  className={viewerMode === 'basic' ? 'bg-purple-900/20' : ''}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Basic
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        {/* Data Table */}
+        {/* Data Viewer */}
         {csvData.length > 0 && (
-          <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 border-b border-gray-700">
-                  <tr>
-                    {headers.map((header, index) => (
-                      <th
-                        key={index}
-                        className="px-6 py-4 text-left text-sm font-medium text-purple-300 border-r border-gray-700/50"
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700/50">
-                  {csvData.map((row, rowIndex) => (
-                    <tr
-                      key={rowIndex}
-                      onClick={() => handleRowClick(rowIndex)}
-                      className="hover:bg-purple-900/20 cursor-pointer transition-all duration-200"
-                    >
-                      {row.map((cell, cellIndex) => (
-                        <td
-                          key={cellIndex}
-                          className="px-6 py-4 text-sm text-gray-300 border-r border-gray-700/30"
+          <>
+            {viewerMode === 'tabular' ? (
+              <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 border-b border-gray-700">
+                      <tr>
+                        {headers.map((header, index) => (
+                          <th
+                            key={index}
+                            className="px-6 py-4 text-left text-sm font-medium text-purple-300 border-r border-gray-700/50"
+                          >
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700/50">
+                      {csvData.map((row, rowIndex) => (
+                        <tr
+                          key={rowIndex}
+                          onClick={() => handleRowClick(rowIndex)}
+                          className="hover:bg-purple-900/20 cursor-pointer transition-all duration-200 text-sm"
                         >
-                          <div className="whitespace-pre-wrap break-words leading-relaxed">
-                            {cell}
-                          </div>
-                        </td>
+                          {row.map((cell, cellIndex) => (
+                            <td
+                              key={cellIndex}
+                              className="px-6 py-4 text-gray-300 border-r border-gray-700/30"
+                            >
+                              <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                {cell || ''}
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <BasicViewer
+                currentRowData={csvData[currentRowIndex] || []}
+                headers={headers}
+                currentRowIndex={currentRowIndex}
+                totalRows={csvData.length}
+                datasetName={currentDataset.name}
+                onFieldChange={handleFieldChange}
+                onNavigate={handleNavigate}
+              />
+            )}
+          </>
         )}
 
         {/* Add Field Modal */}

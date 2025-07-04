@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, Download, ChevronLeft, ChevronRight, PencilIcon, Sparkles, Database, Trash2 } from 'lucide-react';
+import { Upload, Download, ChevronLeft, ChevronRight, PencilIcon, Sparkles, Database, Trash2, ChevronDown, Eye } from 'lucide-react';
 import Papa from 'papaparse';
 import { v4 as uuidv4 } from 'uuid';
 import useLocalStorageState from 'use-local-storage-state';
@@ -15,6 +15,12 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface Dataset {
   id: string;
@@ -35,6 +41,7 @@ const CSVAnnotationTool: React.FC = () => {
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [showSheet, setShowSheet] = useState(false);
   const [annotation, setAnnotation] = useState('');
+  const [viewerMode, setViewerMode] = useState<'basic' | 'compact' | 'detailed'>('basic');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentDataset = datasets.find(d => d.id === currentDatasetId);
@@ -286,6 +293,52 @@ const CSVAnnotationTool: React.FC = () => {
         {/* Data Table */}
         {currentDataset && csvData.length > 0 && (
           <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
+            {/* Table Controls */}
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-medium text-purple-300 flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  Data Viewer
+                </h3>
+                <Badge variant="secondary" className="bg-purple-900/30 text-purple-300 border-purple-700">
+                  {csvData.length} rows loaded
+                </Badge>
+              </div>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Eye className="h-4 w-4" />
+                    Viewer: {viewerMode.charAt(0).toUpperCase() + viewerMode.slice(1)}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem 
+                    onClick={() => setViewerMode('basic')}
+                    className={viewerMode === 'basic' ? 'bg-purple-900/20' : ''}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Viewer Basic
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setViewerMode('compact')}
+                    className={viewerMode === 'compact' ? 'bg-purple-900/20' : ''}
+                  >
+                    <Database className="h-4 w-4 mr-2" />
+                    Viewer Compact
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setViewerMode('detailed')}
+                    className={viewerMode === 'detailed' ? 'bg-purple-900/20' : ''}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Viewer Detailed
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gradient-to-r from-purple-900/50 to-indigo-900/50 border-b border-gray-700">
@@ -293,7 +346,10 @@ const CSVAnnotationTool: React.FC = () => {
                     {headers.map((header, index) => (
                       <th
                         key={index}
-                        className="px-6 py-4 text-left text-sm font-medium text-purple-300 border-r border-gray-700/50"
+                        className={`text-left text-sm font-medium text-purple-300 border-r border-gray-700/50 ${
+                          viewerMode === 'compact' ? 'px-3 py-2' : 
+                          viewerMode === 'detailed' ? 'px-8 py-6' : 'px-6 py-4'
+                        }`}
                       >
                         {header}
                       </th>
@@ -305,16 +361,42 @@ const CSVAnnotationTool: React.FC = () => {
                     <tr
                       key={rowIndex}
                       onClick={() => handleRowClick(rowIndex)}
-                      className="hover:bg-purple-900/20 cursor-pointer transition-all duration-200"
+                      className={`hover:bg-purple-900/20 cursor-pointer transition-all duration-200 ${
+                        viewerMode === 'compact' ? 'text-xs' : 
+                        viewerMode === 'detailed' ? 'text-base' : 'text-sm'
+                      }`}
                     >
                       {row.map((cell, cellIndex) => (
                         <td
                           key={cellIndex}
-                          className="px-6 py-4 text-sm text-gray-300 border-r border-gray-700/30"
+                          className={`text-gray-300 border-r border-gray-700/30 ${
+                            viewerMode === 'compact' ? 'px-3 py-2' : 
+                            viewerMode === 'detailed' ? 'px-8 py-6' : 'px-6 py-4'
+                          }`}
                         >
-                          <div className="whitespace-pre-wrap break-words leading-relaxed">
-                            {cell}
+                          <div className={`break-words leading-relaxed ${
+                            viewerMode === 'compact' ? 'whitespace-nowrap overflow-hidden text-ellipsis max-w-32' :
+                            viewerMode === 'detailed' ? 'whitespace-pre-wrap max-w-96' :
+                            'whitespace-pre-wrap'
+                          }`}>
+                            {viewerMode === 'detailed' && cell.length > 200 ? (
+                              <>
+                                {cell.substring(0, 200)}
+                                <span className="text-purple-400 font-medium">... (click to view full)</span>
+                              </>
+                            ) : cell}
                           </div>
+                          {viewerMode === 'detailed' && annotations[rowIndex] && (
+                            <div className="mt-3 p-3 bg-purple-900/30 rounded-lg border border-purple-700/50">
+                              <div className="flex items-center gap-2 mb-2">
+                                <PencilIcon className="h-4 w-4 text-purple-400" />
+                                <span className="text-xs font-medium text-purple-300">Annotation</span>
+                              </div>
+                              <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                                {annotations[rowIndex]}
+                              </div>
+                            </div>
+                          )}
                         </td>
                       ))}
                     </tr>
