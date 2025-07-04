@@ -1,25 +1,22 @@
 #!/usr/bin/env tsx
 
 import * as dotenv from 'dotenv';
-import {LangChainGitHubIndexer} from "@/lib/langchain-indexer";
+import {LangChainIndexer} from "@/lib/langchain-indexer";
 
 // Load environment variables
 dotenv.config();
 
 async function main() {
-  const indexer = new LangChainGitHubIndexer();
+  const indexer = new LangChainIndexer();
 
   try {
-    console.log('🚀 Starting LangChain GitHub issues indexing...');
+    console.log('🚀 Starting LangChain indexing (GitHub issues + FAQs)...');
     
     // Initialize the indexer
     await indexer.initialize();
     
-    // Clear existing index
-    await indexer.clearIndex();
-    
-    // Index GitHub issues
-    await indexer.indexGitHubIssues();
+    // Index all data sources (GitHub issues + FAQs)
+    await indexer.indexAll();
     
     // Test the indexing
     await indexer.testIndexing();

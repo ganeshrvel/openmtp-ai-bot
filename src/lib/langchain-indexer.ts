@@ -5,7 +5,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 
-export class LangChainGitHubIndexer {
+export class LangChainIndexer {
   private embeddings: OpenAIEmbeddings;
   private vectorStore: PGVectorStore;
   private textSplitter: RecursiveCharacterTextSplitter;
@@ -91,6 +91,7 @@ export class LangChainGitHubIndexer {
           url: issue.url,
           labels: issue.labels || [],
           issue_ref: `Issue #${issue.issue_number}`,
+          document_source: 'github-issues',
           source: 'github-issues',
           answers_count: issue.answers?.length || 0,
           replies_count: issue.replies?.length || 0,
@@ -148,6 +149,101 @@ export class LangChainGitHubIndexer {
     }
   }
 
+  async indexFAQs() {
+    console.log('🚀 Starting FAQ indexing with LangChain...');
+
+    // Read from faqs directory
+    const faqsDir = path.join(process.cwd(), 'faqs');
+    const documents: Document[] = [];
+
+    try {
+      const files = fs.readdirSync(faqsDir).filter((file: string) => file.endsWith('.json'));
+      console.log(`📁 Found ${files.length} FAQ files`);
+
+      for (const file of files) {
+        const filePath = path.join(faqsDir, file);
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const faqData = JSON.parse(content);
+
+        if (faqData.faqs && Array.isArray(faqData.faqs)) {
+          for (const faq of faqData.faqs) {
+            // Create searchable text from FAQ
+            let text = `FAQ: ${faq.question}\n\n`;
+            text += `Answer: ${faq.answer}\n\n`;
+            text += `Category: ${faq.category}`;
+
+            // Create metadata
+            const metadata = {
+              faq_id: faq.id,
+              question: faq.question,
+              category: faq.category,
+              document_source: 'faq',
+              source: 'faq',
+              faq_ref: `FAQ #${faq.id}`,
+            };
+
+            // Create document
+            documents.push(new Document({
+              pageContent: text,
+              metadata,
+            }));
+          }
+        }
+      }
+
+      console.log(`📄 Created ${documents.length} documents from FAQs`);
+
+      // Split documents into chunks and enhance metadata with chunk content
+      const allChunks: Document[] = [];
+      for (const doc of documents) {
+        const chunks = await this.textSplitter.splitDocuments([doc]);
+        
+        // Enhance each chunk's metadata with the actual chunk content
+        const enhancedChunks = chunks.map((chunk, index) => {
+          return new Document({
+            pageContent: chunk.pageContent,
+            metadata: {
+              ...chunk.metadata,
+              chunk_index: index,
+              chunk_size: chunk.pageContent.length,
+              original_doc_length: doc.pageContent.length,
+            }
+          });
+        });
+        
+        allChunks.push(...enhancedChunks);
+      }
+      
+      console.log(`✂️ Split into ${allChunks.length} chunks`);
+
+      // Add documents to vector store in batches
+      const batchSize = 100;
+      for (let i = 0; i < allChunks.length; i += batchSize) {
+        const batch = allChunks.slice(i, i + batchSize);
+        await this.vectorStore.addDocuments(batch);
+        console.log(`✅ Indexed batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allChunks.length / batchSize)}`);
+      }
+
+      console.log(`🎉 Successfully indexed ${allChunks.length} chunks from ${documents.length} FAQs!`);
+
+    } catch (error) {
+      console.error('❌ Error reading FAQs:', error);
+      console.error(`❌ FAQs directory not found at: ${faqsDir}`);
+      console.error('❌ Please ensure the faqs directory exists and contains JSON files');
+      throw error;
+    }
+  }
+
+  async indexAll() {
+    console.log('🚀 Starting complete indexing process...');
+    
+    await this.clearIndex();
+    await this.indexGitHubIssues();
+    await this.indexFAQs();
+    
+    console.log('🎉 Complete indexing process finished!');
+  }
+
   async testIndexing() {
     console.log('🧪 Testing indexed data...');
 
@@ -157,6 +253,11 @@ export class LangChainGitHubIndexer {
       'Transfer speed is slow',
       'What is OpenMTP',
       'USB debugging',
+      'Samsung device connection issues',
+      'Google Drive interfering',
+      'Allow access to device data',
+      'Refresh button stuck',
+      'Operation not permitted error',
     ];
 
     for (const query of testQueries) {
@@ -165,13 +266,24 @@ export class LangChainGitHubIndexer {
       
       console.log(`   Found ${results.length} similar documents:`);
       results.forEach(([doc, score], index) => {
-        console.log(`   ${index + 1}. ${doc.metadata?.issue_ref || 'Unknown'} (Score: ${score.toFixed(4)})`);
-        console.log(`      Title: ${doc.metadata?.title}`);
-        console.log(`      URL: ${doc.metadata?.url}`);
-        console.log(`      Status: ${doc.metadata?.status}`);
-        console.log(`      Labels: ${doc.metadata?.labels?.join(', ') || 'None'}`);
-        console.log(`      Chunk Index: ${doc.metadata?.chunk_index || 0}`);
-        console.log(`      Chunk Size: ${doc.metadata?.chunk_size || 0} chars`);
+        const source = doc.metadata?.document_source;
+        const ref = doc.metadata?.issue_ref || doc.metadata?.faq_ref;
+        
+        console.log(`   ${index + 1}. ${ref} [${source?.toUpperCase()}] (Score: ${score.toFixed(4)})`);
+        console.log(`      Source: ${source}`);
+        
+        if (source === 'github-issues') {
+          console.log(`      Title: ${doc.metadata?.title}`);
+          console.log(`      URL: ${doc.metadata?.url}`);
+          console.log(`      Status: ${doc.metadata?.status}`);
+          console.log(`      Labels: ${doc.metadata?.labels?.join(', ')}`);
+        } else if (source === 'faq') {
+          console.log(`      Question: ${doc.metadata?.question}`);
+          console.log(`      Category: ${doc.metadata?.category}`);
+        }
+        
+        console.log(`      Chunk Index: ${doc.metadata?.chunk_index}`);
+        console.log(`      Chunk Size: ${doc.metadata?.chunk_size} chars`);
         console.log(`      Full Chunk Content:`);
         console.log(`      ${doc.pageContent}`);
         console.log('─'.repeat(120));
@@ -186,11 +298,12 @@ export class LangChainGitHubIndexer {
     try {
       // Delete all existing data from the table
       const client = await this.vectorStore.pool.connect();
-      await client.query('DELETE FROM langchain_pg_embedding');
+      const result = await client.query('DELETE FROM langchain_pg_embedding');
       client.release();
-      console.log('✅ Index cleared successfully - all data deleted');
+      console.log(`✅ Index cleared successfully - deleted ${result.rowCount} rows`);
     } catch (error) {
-      console.log('ℹ️ Error clearing index:', error);
+      console.log('❌ Error clearing index:', error);
+      throw error;
     }
   }
 }
