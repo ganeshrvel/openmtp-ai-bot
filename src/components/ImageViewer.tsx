@@ -78,11 +78,13 @@ export const ImageViewer = React.memo(({
     return header.toLowerCase() === 'sl';
   };
 
-  const getCorrectnessValue = (value: string): 'pass' | 'fail' | 'unsure' => {
+  const getCorrectnessValue = (value: string): 'pass' | 'fail' | 'unsure' | null => {
     const lowerValue = value?.toLowerCase() || '';
+    if (!value || value.trim() === '') return null; // No selection when empty
     if (lowerValue.includes('pass') || lowerValue.includes('correct') || lowerValue === 'true') return 'pass';
     if (lowerValue.includes('fail') || lowerValue.includes('incorrect') || lowerValue === 'false') return 'fail';
-    return 'unsure';
+    if (lowerValue.includes('unsure') || lowerValue === 'unsure') return 'unsure';
+    return null; // No selection for unrecognized values
   };
 
   const handleCorrectnessChange = (headerIndex: number, newValue: 'pass' | 'fail' | 'unsure') => {

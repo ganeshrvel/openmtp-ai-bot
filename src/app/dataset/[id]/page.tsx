@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { BasicViewer } from '@/components/BasicViewer';
 import { ImageViewer } from '@/components/ImageViewer';
+import { AdvancedAnnotatorViewer } from '@/components/AdvancedAnnotatorViewer';
 
 interface Dataset {
   id: string;
@@ -42,7 +43,7 @@ export default function DatasetPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const datasetId = params.id as string;
-  const viewerParam = searchParams.get('viewer') as 'tabular' | 'basic' | 'image' | null;
+  const viewerParam = searchParams.get('viewer') as 'tabular' | 'basic' | 'image' | 'advanced' | null;
   
   const [datasets, setDatasets] = useLocalStorageState<Dataset[]>('csv-datasets', {
     defaultValue: []
@@ -108,20 +109,20 @@ export default function DatasetPage() {
   const [customFieldValues, setCustomFieldValues] = useState<{ [fieldName: string]: string }>({});
   const [newFieldName, setNewFieldName] = useState('');
   const [showAddField, setShowAddField] = useState(false);
-  const [viewerMode, setViewerMode] = useState<'tabular' | 'basic' | 'image'>(viewerParam || 'tabular');
+  const [viewerMode, setViewerMode] = useState<'tabular' | 'basic' | 'image' | 'advanced'>(viewerParam || 'tabular');
 
   const currentDataset = datasets.find(d => d.id === datasetId);
   const csvData = currentDataset?.rows || [];
   const headers = currentDataset?.headers || [];
 
-  const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic' | 'image') => {
+  const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic' | 'image' | 'advanced') => {
     setViewerMode(newViewerMode);
     router.push(`/dataset/${datasetId}/${newViewerMode}`);
   }, [datasetId, router]);
 
   // Sync viewer mode with URL parameter
   useEffect(() => {
-    if (viewerParam && (viewerParam === 'tabular' || viewerParam === 'basic' || viewerParam === 'image')) {
+    if (viewerParam && (viewerParam === 'tabular' || viewerParam === 'basic' || viewerParam === 'image' || viewerParam === 'advanced')) {
       setViewerMode(viewerParam);
     }
   }, [viewerParam]);
@@ -315,6 +316,60 @@ export default function DatasetPage() {
   // Stable event handlers for BasicViewer
   const handleFieldChange = useCallback((headerIndex: number, newValue: string) => {
     if (currentDataset) {
+      // Handle special case for adding new fields (Advanced Annotator)
+      if (headerIndex === -1) {
+        try {
+          const parsed = JSON.parse(newValue);
+          if (parsed.fieldName && parsed.data) {
+            // Add new field to dataset
+            const newFieldName = parsed.fieldName;
+            const fieldData = JSON.stringify(parsed.data);
+            
+            setDatasets(prev => prev.map(dataset => {
+              if (dataset.id === datasetId) {
+                // Check if field already exists
+                if (!dataset.headers.includes(newFieldName)) {
+                  // Add new column to headers
+                  const newHeaders = [...dataset.headers, newFieldName];
+                  // Add empty values to all rows except current row
+                  const newRows = dataset.rows.map((row, index) => {
+                    const newRow = [...row, ''];
+                    if (index === currentRowIndex) {
+                      newRow[newRow.length - 1] = fieldData;
+                    }
+                    return newRow;
+                  });
+                  
+                  return {
+                    ...dataset,
+                    headers: newHeaders,
+                    rows: newRows,
+                    updatedAt: new Date().toISOString()
+                  };
+                } else {
+                  // Field exists, update it normally
+                  const fieldIndex = dataset.headers.indexOf(newFieldName);
+                  const newRows = [...dataset.rows];
+                  newRows[currentRowIndex][fieldIndex] = fieldData;
+                  
+                  return {
+                    ...dataset,
+                    rows: newRows,
+                    updatedAt: new Date().toISOString()
+                  };
+                }
+              }
+              return dataset;
+            }));
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to parse field addition data:', e);
+          return;
+        }
+      }
+      
+      // Normal field update
       const newRows = [...currentDataset.rows];
       newRows[currentRowIndex][headerIndex] = newValue;
       
@@ -413,6 +468,13 @@ export default function DatasetPage() {
                   <Eye className="h-4 w-4 mr-2" />
                   Image
                 </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleViewerChange('advanced')}
+                  className={viewerMode === 'advanced' ? 'bg-purple-900/20' : ''}
+                >
+                  <PencilIcon className="h-4 w-4 mr-2" />
+                  Advanced Annotator
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -470,8 +532,18 @@ export default function DatasetPage() {
                 onFieldChange={handleFieldChange}
                 onNavigate={handleNavigate}
               />
-            ) : (
+            ) : viewerMode === 'image' ? (
               <ImageViewer
+                currentRowData={csvData[currentRowIndex] || []}
+                headers={headers}
+                currentRowIndex={currentRowIndex}
+                totalRows={csvData.length}
+                datasetName={currentDataset.name}
+                onFieldChange={handleFieldChange}
+                onNavigate={handleNavigate}
+              />
+            ) : (
+              <AdvancedAnnotatorViewer
                 currentRowData={csvData[currentRowIndex] || []}
                 headers={headers}
                 currentRowIndex={currentRowIndex}

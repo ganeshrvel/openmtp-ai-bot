@@ -11,7 +11,7 @@ export default function DatasetViewerPage() {
 
   useEffect(() => {
     // Validate viewer type and redirect to the base dataset page with viewer state
-    if (viewer === 'tabular' || viewer === 'basic' || viewer === 'image') {
+    if (viewer === 'tabular' || viewer === 'basic' || viewer === 'image' || viewer === 'advanced') {
       // Redirect to the main dataset page - the state will be handled there
       router.replace(`/dataset/${datasetId}?viewer=${viewer}`);
     } else {
