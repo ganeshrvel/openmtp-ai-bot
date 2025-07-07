@@ -25,6 +25,7 @@ import {
 import { BasicViewer } from '@/components/BasicViewer';
 import { ImageViewer } from '@/components/ImageViewer';
 import { AdvancedAnnotatorViewer } from '@/components/AdvancedAnnotatorViewer';
+import { DatasetFilter, applyFilters, type FilterRule } from '@/components/DatasetFilter';
 
 interface Dataset {
   id: string;
@@ -110,10 +111,16 @@ export default function DatasetPage() {
   const [newFieldName, setNewFieldName] = useState('');
   const [showAddField, setShowAddField] = useState(false);
   const [viewerMode, setViewerMode] = useState<'tabular' | 'basic' | 'image' | 'advanced'>(viewerParam || 'tabular');
+  const [filters, setFilters] = useState<FilterRule[]>([]);
 
   const currentDataset = datasets.find(d => d.id === datasetId);
-  const csvData = currentDataset?.rows || [];
+  const allCsvData = currentDataset?.rows || [];
   const headers = currentDataset?.headers || [];
+  
+  // Apply filters to get valid row indices
+  const filteredRowIndices = applyFilters(allCsvData, headers, filters);
+  const csvData = filteredRowIndices.map(index => allCsvData[index]);
+  const filteredRowCount = csvData.length;
 
   const handleViewerChange = useCallback((newViewerMode: 'tabular' | 'basic' | 'image' | 'advanced') => {
     setViewerMode(newViewerMode);
@@ -312,10 +319,18 @@ export default function DatasetPage() {
 
   // Basic Viewer state
   const [currentRowIndex, setCurrentRowIndex] = useState(0);
+  
+  // Reset current row when filters change
+  useEffect(() => {
+    setCurrentRowIndex(0);
+  }, [filters]);
 
   // Stable event handlers for BasicViewer
   const handleFieldChange = useCallback((headerIndex: number, newValue: string) => {
     if (currentDataset) {
+      // Get the actual row index in the original dataset
+      const actualRowIndex = filteredRowIndices[currentRowIndex];
+      
       // Handle special case for adding new fields (Advanced Annotator)
       if (headerIndex === -1) {
         try {
@@ -334,7 +349,7 @@ export default function DatasetPage() {
                   // Add empty values to all rows except current row
                   const newRows = dataset.rows.map((row, index) => {
                     const newRow = [...row, ''];
-                    if (index === currentRowIndex) {
+                    if (index === actualRowIndex) {
                       newRow[newRow.length - 1] = fieldData;
                     }
                     return newRow;
@@ -350,7 +365,7 @@ export default function DatasetPage() {
                   // Field exists, update it normally
                   const fieldIndex = dataset.headers.indexOf(newFieldName);
                   const newRows = [...dataset.rows];
-                  newRows[currentRowIndex][fieldIndex] = fieldData;
+                  newRows[actualRowIndex][fieldIndex] = fieldData;
                   
                   return {
                     ...dataset,
@@ -369,9 +384,9 @@ export default function DatasetPage() {
         }
       }
       
-      // Normal field update
+      // Normal field update - use actual row index
       const newRows = [...currentDataset.rows];
-      newRows[currentRowIndex][headerIndex] = newValue;
+      newRows[actualRowIndex][headerIndex] = newValue;
       
       setDatasets(prev => prev.map(dataset => {
         if (dataset.id === datasetId) {
@@ -384,7 +399,7 @@ export default function DatasetPage() {
         return dataset;
       }));
     }
-  }, [currentDataset, currentRowIndex, datasetId, setDatasets]);
+  }, [currentDataset, currentRowIndex, datasetId, setDatasets, filteredRowIndices]);
 
   const handleNavigate = useCallback((direction: 'prev' | 'next') => {
     if (direction === 'prev' && currentRowIndex > 0) {
@@ -423,12 +438,17 @@ export default function DatasetPage() {
             <div>
               <h1 className="text-3xl font-bold text-white">{currentDataset.name}</h1>
               <p className="text-gray-400">
-                {csvData.length} rows • {headers.length} columns • {Object.keys(currentDataset.annotations).length} annotations
+                {filters.length > 0 ? `${filteredRowCount} of ${allCsvData.length}` : allCsvData.length} rows • {headers.length} columns • {Object.keys(currentDataset.annotations).length} annotations
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
+            <DatasetFilter
+              headers={headers}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
             <Button onClick={exportCSV} variant="outline" className="gap-2">
               <Database className="h-4 w-4" />
               Export Annotated CSV
@@ -500,24 +520,27 @@ export default function DatasetPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700/50">
-                      {csvData.map((row, rowIndex) => (
-                        <tr
-                          key={rowIndex}
-                          onClick={() => handleRowClick(rowIndex)}
-                          className="hover:bg-purple-900/20 cursor-pointer transition-all duration-200 text-sm"
-                        >
-                          {row.map((cell, cellIndex) => (
-                            <td
-                              key={cellIndex}
-                              className="px-6 py-4 text-gray-300 border-r border-gray-700/30"
-                            >
-                              <div className="whitespace-pre-wrap break-words leading-relaxed">
-                                {cell || ''}
-                              </div>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
+                      {csvData.map((row, filteredIndex) => {
+                        const actualRowIndex = filteredRowIndices[filteredIndex];
+                        return (
+                          <tr
+                            key={actualRowIndex}
+                            onClick={() => handleRowClick(actualRowIndex)}
+                            className="hover:bg-purple-900/20 cursor-pointer transition-all duration-200 text-sm"
+                          >
+                            {row.map((cell, cellIndex) => (
+                              <td
+                                key={cellIndex}
+                                className="px-6 py-4 text-gray-300 border-r border-gray-700/30"
+                              >
+                                <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                  {cell || ''}
+                                </div>
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
