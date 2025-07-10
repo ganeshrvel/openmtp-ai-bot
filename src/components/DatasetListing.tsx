@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useRef } from 'react';
-import { Upload, Sparkles, Database, Trash2, Eye, Calendar, BarChart3 } from 'lucide-react';
+import { Upload, Sparkles, Database, Trash2, Eye, Calendar, BarChart3, FolderSearch } from 'lucide-react';
 import Papa from 'papaparse';
 import { v4 as uuidv4 } from 'uuid';
 import useLocalStorageState from 'use-local-storage-state';
@@ -225,14 +225,24 @@ const DatasetListing: React.FC = () => {
               accept=".csv"
               className="hidden"
             />
-            <Button 
-              onClick={() => fileInputRef.current?.click()} 
-              className="gap-2 px-8 py-3 text-lg"
-              size="lg"
-            >
-              <Upload className="h-5 w-5" />
-              Choose CSV File
-            </Button>
+            <div className="flex gap-4 justify-center">
+              <Button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="gap-2 px-8 py-3 text-lg"
+                size="lg"
+              >
+                <Upload className="h-5 w-5" />
+                Choose CSV File
+              </Button>
+              <Button 
+                onClick={() => router.push('/dataset-cleaner')} 
+                className="gap-2 px-8 py-3 text-lg bg-indigo-600 hover:bg-indigo-700"
+                size="lg"
+              >
+                <FolderSearch className="h-5 w-5" />
+                Dataset Cleaner
+              </Button>
+            </div>
           </div>
         </div>
 
