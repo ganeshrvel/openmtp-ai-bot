@@ -18,13 +18,14 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 
-export type FilterOperator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'empty' | 'not_empty';
+export type FilterOperator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'empty' | 'not_empty' | 'col_equals' | 'col_not_equals';
 
 export interface FilterRule {
   id: string;
   column: string;
   operator: FilterOperator;
   value: string;
+  compareColumn?: string; // For column-to-column comparisons
 }
 
 interface DatasetFilterProps {
@@ -34,15 +35,17 @@ interface DatasetFilterProps {
   className?: string;
 }
 
-const OPERATORS: { value: FilterOperator; label: string; needsValue: boolean }[] = [
-  { value: 'equals', label: 'Equals', needsValue: true },
-  { value: 'not_equals', label: 'Not Equals', needsValue: true },
-  { value: 'contains', label: 'Contains', needsValue: true },
-  { value: 'not_contains', label: 'Not Contains', needsValue: true },
-  { value: 'starts_with', label: 'Starts With', needsValue: true },
-  { value: 'ends_with', label: 'Ends With', needsValue: true },
-  { value: 'empty', label: 'Is Empty', needsValue: false },
-  { value: 'not_empty', label: 'Is Not Empty', needsValue: false },
+const OPERATORS: { value: FilterOperator; label: string; needsValue: boolean; needsColumn: boolean }[] = [
+  { value: 'equals', label: 'Equals', needsValue: true, needsColumn: false },
+  { value: 'not_equals', label: 'Not Equals', needsValue: true, needsColumn: false },
+  { value: 'contains', label: 'Contains', needsValue: true, needsColumn: false },
+  { value: 'not_contains', label: 'Not Contains', needsValue: true, needsColumn: false },
+  { value: 'starts_with', label: 'Starts With', needsValue: true, needsColumn: false },
+  { value: 'ends_with', label: 'Ends With', needsValue: true, needsColumn: false },
+  { value: 'empty', label: 'Is Empty', needsValue: false, needsColumn: false },
+  { value: 'not_empty', label: 'Is Not Empty', needsValue: false, needsColumn: false },
+  { value: 'col_equals', label: 'Equals Column', needsValue: false, needsColumn: true },
+  { value: 'col_not_equals', label: 'Not Equals Column', needsValue: false, needsColumn: true },
 ];
 
 export const DatasetFilter: React.FC<DatasetFilterProps> = ({
@@ -58,16 +61,29 @@ export const DatasetFilter: React.FC<DatasetFilterProps> = ({
       id: Date.now().toString(),
       column: headers[0] || '',
       operator: 'contains',
-      value: ''
+      value: '',
+      compareColumn: headers[1] || headers[0] || ''
     };
     onFiltersChange([...filters, newFilter]);
   }, [headers, filters, onFiltersChange]);
 
   const updateFilter = useCallback((id: string, updates: Partial<FilterRule>) => {
-    onFiltersChange(filters.map(filter => 
-      filter.id === id ? { ...filter, ...updates } : filter
-    ));
-  }, [filters, onFiltersChange]);
+    onFiltersChange(filters.map(filter => {
+      if (filter.id === id) {
+        const updated = { ...filter, ...updates };
+        // Reset compare column if switching from column comparison to value comparison
+        if (updates.operator && !OPERATORS.find(op => op.value === updates.operator)?.needsColumn) {
+          updated.compareColumn = '';
+        }
+        // Set default compare column if switching to column comparison
+        if (updates.operator && OPERATORS.find(op => op.value === updates.operator)?.needsColumn && !updated.compareColumn) {
+          updated.compareColumn = headers[1] || headers[0] || '';
+        }
+        return updated;
+      }
+      return filter;
+    }));
+  }, [filters, onFiltersChange, headers]);
 
   const removeFilter = useCallback((id: string) => {
     onFiltersChange(filters.filter(filter => filter.id !== id));
@@ -188,6 +204,28 @@ export const DatasetFilter: React.FC<DatasetFilterProps> = ({
                         className="text-xs"
                       />
                     )}
+
+                    {/* Column Comparison Selector */}
+                    {OPERATORS.find(op => op.value === filter.operator)?.needsColumn && (
+                      <div className="space-y-2">
+                        <label className="text-xs text-gray-400">Compare to column:</label>
+                        <Select 
+                          value={filter.compareColumn || ''} 
+                          onValueChange={(value) => updateFilter(filter.id, { compareColumn: value })}
+                        >
+                          <SelectTrigger className="text-xs">
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {headers.filter(h => h !== filter.column).map(header => (
+                              <SelectItem key={header} value={header} className="text-xs">
+                                {header}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -242,6 +280,18 @@ export const applyFilters = (
           return cellValue.trim() === '';
         case 'not_empty':
           return cellValue.trim() !== '';
+        case 'col_equals':
+          if (!filter.compareColumn) return true;
+          const compareColumnIndex = headers.indexOf(filter.compareColumn);
+          if (compareColumnIndex === -1) return true;
+          const compareValue = (row[compareColumnIndex] || '').toLowerCase();
+          return cellValue === compareValue;
+        case 'col_not_equals':
+          if (!filter.compareColumn) return true;
+          const compareColumnIndex2 = headers.indexOf(filter.compareColumn);
+          if (compareColumnIndex2 === -1) return true;
+          const compareValue2 = (row[compareColumnIndex2] || '').toLowerCase();
+          return cellValue !== compareValue2;
         default:
           return true;
       }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, PencilIcon, ArrowLeft, Database, Plus, X, ChevronDown, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PencilIcon, ArrowLeft, Database, Plus, X, ChevronDown, Eye, Edit } from 'lucide-react';
 import Papa from 'papaparse';
 import useLocalStorageState from 'use-local-storage-state';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -112,6 +112,8 @@ export default function DatasetPage() {
   const [showAddField, setShowAddField] = useState(false);
   const [viewerMode, setViewerMode] = useState<'tabular' | 'basic' | 'image' | 'advanced'>(viewerParam || 'tabular');
   const [filters, setFilters] = useState<FilterRule[]>([]);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newDatasetName, setNewDatasetName] = useState('');
 
   const currentDataset = datasets.find(d => d.id === datasetId);
   const allCsvData = currentDataset?.rows || [];
@@ -409,6 +411,37 @@ export default function DatasetPage() {
     }
   }, [currentRowIndex, csvData.length]);
 
+  const handleRenameDataset = useCallback(() => {
+    if (!newDatasetName.trim()) {
+      setIsRenaming(false);
+      return;
+    }
+
+    setDatasets(prev => prev.map(dataset => {
+      if (dataset.id === datasetId) {
+        return {
+          ...dataset,
+          name: newDatasetName.trim(),
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return dataset;
+    }));
+
+    setIsRenaming(false);
+    setNewDatasetName('');
+  }, [newDatasetName, datasetId, setDatasets]);
+
+  const startRenaming = useCallback(() => {
+    setNewDatasetName(currentDataset?.name || '');
+    setIsRenaming(true);
+  }, [currentDataset?.name]);
+
+  const cancelRenaming = useCallback(() => {
+    setIsRenaming(false);
+    setNewDatasetName('');
+  }, []);
+
   if (!currentDataset) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 flex items-center justify-center">
@@ -436,7 +469,52 @@ export default function DatasetPage() {
               Back to Datasets
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-white">{currentDataset.name}</h1>
+              {isRenaming ? (
+                <div className="flex items-center gap-3">
+                  <Input
+                    value={newDatasetName}
+                    onChange={(e) => setNewDatasetName(e.target.value)}
+                    className="text-2xl font-bold bg-gray-800 border-gray-600 text-white max-w-md"
+                    placeholder="Dataset name..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRenameDataset();
+                      } else if (e.key === 'Escape') {
+                        cancelRenaming();
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <Button
+                    onClick={handleRenameDataset}
+                    disabled={!newDatasetName.trim()}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    onClick={cancelRenaming}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-bold text-white">{currentDataset.name}</h1>
+                  <Button
+                    onClick={startRenaming}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-gray-400 hover:text-white"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Rename
+                  </Button>
+                </div>
+              )}
               <p className="text-gray-400">
                 {filters.length > 0 ? `${filteredRowCount} of ${allCsvData.length}` : allCsvData.length} rows • {headers.length} columns • {Object.keys(currentDataset.annotations).length} annotations
               </p>
